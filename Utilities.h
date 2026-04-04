@@ -369,6 +369,16 @@ extern RNS::Reticulum reticulum;
     void led_tx_off() { digitalWrite(pin_led_tx, HIGH); }
 		void led_id_on()  { }
 		void led_id_off() { }
+  #elif BOARD_MODEL == BOARD_Faketec
+    // Faketec: single user LED on P0.15 (PIN_LED1 on Nice!Nano-style
+    // ProMicro clone). Active-high; pin_led_rx and pin_led_tx point
+    // at the same pin.
+    void led_rx_on()  { digitalWrite(pin_led_rx, HIGH); }
+    void led_rx_off() { digitalWrite(pin_led_rx, LOW);  }
+    void led_tx_on()  { digitalWrite(pin_led_tx, HIGH); }
+    void led_tx_off() { digitalWrite(pin_led_tx, LOW);  }
+    void led_id_on()  { }
+    void led_id_off() { }
   #elif BOARD_MODEL == BOARD_TECHO
 		void led_rx_on()  { digitalWrite(pin_led_rx, LED_ON); }
 		void led_rx_off() {	digitalWrite(pin_led_rx, LED_OFF); }
@@ -1344,6 +1354,9 @@ void setTXPower() {
 		if (model == MODEL_11) LoRa->setTxPower(mapped_lora_txp, PA_OUTPUT_RFO_PIN);
 		if (model == MODEL_12) LoRa->setTxPower(mapped_lora_txp, PA_OUTPUT_RFO_PIN);
 
+		// Faketec (SX1262; outputPin arg is unused by sx126x driver)
+		if (model == MODEL_18) LoRa->setTxPower(mapped_lora_txp, PA_OUTPUT_PA_BOOST_PIN);
+
 		if (model == MODEL_C6) LoRa->setTxPower(mapped_lora_txp, PA_OUTPUT_RFO_PIN);
     if (model == MODEL_C7) LoRa->setTxPower(mapped_lora_txp, PA_OUTPUT_RFO_PIN);
 
@@ -1844,6 +1857,36 @@ void eeprom_conf_load() {
         #endif
 	}
 }
+
+#if defined(BAKED_CONFIG)
+// Seed the live radio globals from compile-time BAKED_* defines in
+// platformio.ini. Used by the BAKED_CONFIG boot fast-path in RNode_Firmware.ino
+// in lieu of eeprom_conf_load(). No EEPROM reads, no provisioning required.
+//
+// IMPORTANT: also seeds `model`, because setTXPower() in this file is a
+// per-model dispatch table and does nothing if model == 0x00. Without this
+// line the requested TX power silently falls through to a no-op.
+void baked_conf_load() {
+    #if BOARD_MODEL == BOARD_Faketec
+        model = MODEL_18;
+    #endif
+    #ifdef BAKED_FREQ
+        lora_freq = (uint32_t)(BAKED_FREQ);
+    #endif
+    #ifdef BAKED_BW
+        lora_bw = (uint32_t)(BAKED_BW);
+    #endif
+    #ifdef BAKED_SF
+        lora_sf = (int)(BAKED_SF);
+    #endif
+    #ifdef BAKED_CR
+        lora_cr = (int)(BAKED_CR);
+    #endif
+    #ifdef BAKED_TXP
+        lora_txp = (int)(BAKED_TXP);
+    #endif
+}
+#endif
 
 void eeprom_conf_save() {
 	if (hw_ready && radio_online) {

@@ -425,6 +425,14 @@ void setup() {
     modem_packet_queue = xQueueCreate(MODEM_QUEUE_SIZE, sizeof(modem_packet_t*));
   #endif
 
+  // Enable the external 3V3 rail that powers the radio module on
+  // boards that gate it behind a GPIO (e.g. Faketec via P0.13).
+  // Active-high per Meshtastic nrf52_promicro_diy_tcxo variant.
+  #ifdef PIN_VEXT_EN
+    pinMode(PIN_VEXT_EN, OUTPUT);
+    digitalWrite(PIN_VEXT_EN, HIGH);
+  #endif
+
   // Set chip select, reset and interrupt
   // pins for the LoRa module
   #if MODEM == SX1276 || MODEM == SX1278
@@ -1980,6 +1988,35 @@ void validate_status() {
   }
 
   if (boot_vector == START_FROM_BOOTLOADER || boot_vector == START_FROM_POWERON) {
+#if defined(BAKED_CONFIG)
+    // ---- Baked-config fast path ----
+    // Skip the entire EEPROM lock/product/model/hwrev/checksum/conf gate.
+    // Radio parameters come from BAKED_* defines in platformio.ini and are
+    // loaded into the lora_* globals by baked_conf_load(). The node boots
+    // directly into MODE_TNC (transport mode).
+    eeprom_ok = true;
+    if (modem_installed) {
+      #if PLATFORM == PLATFORM_ESP32 || PLATFORM == PLATFORM_NRF52
+        hw_ready = device_init();
+      #else
+        hw_ready = true;
+      #endif
+    } else {
+      hw_ready = false;
+      Serial.write("No radio module found\r\n");
+      #if HAS_DISPLAY
+        if (disp_ready) {
+          device_init_done = true;
+          update_display();
+        }
+      #endif
+    }
+    if (hw_ready) {
+      baked_conf_load();
+      op_mode = MODE_TNC;
+      startRadio();
+    }
+#else
     if (eeprom_lock_set()) {
       if (eeprom_product_valid() && eeprom_model_valid() && eeprom_hwrev_valid()) {
         if (eeprom_checksum_valid()) {
@@ -2040,6 +2077,7 @@ void validate_status() {
         }
       #endif
     }
+#endif // BAKED_CONFIG
   } else {
     hw_ready = false;
     Serial.write("Error, incorrect boot vector\r\n");

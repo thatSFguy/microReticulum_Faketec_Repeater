@@ -10,3 +10,4 @@ build/*
 .pio/*
 .vscode/*
 Debug*
+Faketec.md

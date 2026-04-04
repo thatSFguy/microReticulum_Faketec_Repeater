@@ -114,6 +114,10 @@
   #define MODEL_11            0x11 // RAK4631, 433 Mhz
   #define MODEL_12            0x12 // RAK4631, 868 Mhz
 
+  #define PRODUCT_Faketec     0x18 // Faketec nRF52840 ProMicro board
+  #define BOARD_Faketec       0x52
+  #define MODEL_18            0x18 // Faketec, 868/915 MHz
+
   #define PRODUCT_HMBRW       0xF0
   #define BOARD_HMBRW         0x32
   #define BOARD_HUZZAH32      0x34
@@ -141,6 +145,8 @@
 
   #ifndef MODEM
     #if BOARD_MODEL == BOARD_RAK4631
+      #define MODEM SX1262
+    #elif BOARD_MODEL == BOARD_Faketec
       #define MODEM SX1262
     #elif BOARD_MODEL == BOARD_GENERIC_NRF52
       #define MODEM SX1262
@@ -889,6 +895,71 @@
       const int DISPLAY_CLK = PIN_T114_TFT_SCK;
       const int DISPLAY_BL_PIN = PIN_T114_TFT_BLGT;
       const int DISPLAY_RST = PIN_T114_TFT_RST;
+
+    #elif BOARD_MODEL == BOARD_Faketec
+      // Faketec nRF52840 ProMicro-style board with SX1262
+      // Pin mapping: P0.x = x, P1.x = 32 + x
+      //
+      // Supported radio modules (all external RF switch):
+      //   Ebyte E22-900M22S    - SX1262, TCXO
+      //   Ebyte E22-900MM22S   - SX1262, no TCXO  (build with -DNO_TCXO)
+      //   Ebyte E22-900M30S    - SX1262, TCXO     (default)
+      //   Ebyte E22-900M33S    - SX1262, TCXO     (requires MAX_POWER=8)
+      //   Ebyte E220-900M22S   - LLCC68, no TCXO  (build with -DNO_TCXO)
+      //
+      // DIO2 drives TX on the external T/R switch; pin_rxen drives RX/LNA.
+      // TCXO is powered from SX1262 DIO3 when HAS_TCXO is true.
+      #define MODEM SX1262
+      #define HAS_EEPROM false
+      #define HAS_DISPLAY false
+      #define HAS_BLUETOOTH false
+      #define HAS_BLE true
+      #define HAS_CONSOLE false
+      #define HAS_PMU false
+      #define HAS_NP false
+      #define HAS_SD false
+      #if defined(NO_TCXO)
+        #define HAS_TCXO false
+      #else
+        #define HAS_TCXO true
+      #endif
+      #define HAS_RF_SWITCH_RX_TX true
+      #define HAS_BUSY true
+      #define HAS_INPUT true
+      #define DIO2_AS_RF_SWITCH true
+      #define CONFIG_UART_BUFFER_SIZE 6144
+      #define CONFIG_QUEUE_SIZE 6144
+      #define CONFIG_QUEUE_MAX_LENGTH 200
+      #define EEPROM_SIZE 296
+      #define EEPROM_OFFSET EEPROM_SIZE-EEPROM_RESERVED
+      #define BLE_MANUFACTURER "Faketec"
+      #define BLE_MODEL "Faketec"
+
+      // Power / peripheral enables
+      // P0.13 is the external 3V3 rail enable for the Ebyte radio module.
+      // Must be asserted HIGH in setup() before SPI, or the radio is
+      // unpowered at boot and SPI ops hang waiting on BUSY.
+      #define PIN_VEXT_EN 13   // P0.13 = 3V3_EN / ext_vcc
+      #define PIN_BATTERY 31   // P0.31 = BATTERY_PIN
+
+      // Button
+      const int pin_btn_usr1 = 32; // P1.00
+
+      // LED (single user LED on Nice!Nano-style ProMicro clone)
+      const int pin_led_rx = 15;   // P0.15 = PIN_LED1
+      const int pin_led_tx = 15;   // P0.15 (same pin — single LED)
+
+      // SX1262 SPI + control pins (per Meshtastic DIY nrf52_promicro_diy_tcxo variant)
+      const int pin_cs    = 45;    // P1.13  NSS
+      const int pin_sclk  = 43;    // P1.11  SCK
+      const int pin_mosi  = 47;    // P1.15  MOSI
+      const int pin_miso  = 2;     // P0.02  MISO
+      const int pin_reset = 9;     // P0.09  RST
+      const int pin_busy  = 29;    // P0.29  BUSY
+      const int pin_dio   = 10;    // P0.10  DIO1 / IRQ
+      const int pin_rxen  = 17;    // P0.17  RXEN
+      const int pin_txen  = -1;    // DIO2_AS_RF_SWITCH handles TX
+      const int pin_tcxo_enable = -1;
 
     #else
       #error An unsupported nRF board was selected. Cannot compile RNode firmware.
