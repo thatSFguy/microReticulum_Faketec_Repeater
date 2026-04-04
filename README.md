@@ -49,7 +49,7 @@ Instructions for command line builds and packaging for firmware distribution.
 
 - `-DHAS_RNS` Used to enable the microReticulum RNS stack and transport node.
 - `-DUDP_TRANSPORT` Used to enable WiFi connection (when configured through `rnodeconf` as an additional transport medium (currently hard-coded to use port 4242).
-- `-DBAKED_CONFIG` Bake LoRa radio parameters into the firmware at compile time and bypass `rnodeconf` provisioning entirely. The node skips the EEPROM lock/product/model/hash/checksum gate at boot and goes straight into `MODE_TNC` with the radio parameters defined by the `BAKED_*` flags below. Useful for dedicated transport/repeater nodes where the radio config is fixed. Zero behavior change for any environment that does not define `BAKED_CONFIG`.
+- `-DBAKED_CONFIG` Bake LoRa radio parameters into the firmware at compile time and bypass `rnodeconf` provisioning entirely. The node skips the EEPROM lock/product/model/hash/checksum gate at boot and goes straight into `MODE_TNC` (Transport Mode) with the radio parameters defined by the `BAKED_*` flags below. **A `BAKED_CONFIG` build comes up in Transport Mode on every boot with no `rnodeconf --tnc` step required.** Useful for dedicated transport/repeater nodes where the radio config is fixed. Zero behavior change for any environment that does not define `BAKED_CONFIG`.
 - `-DBAKED_FREQ=<Hz>` Frequency in Hz (e.g. `904375000` for 904.375 MHz). Requires `BAKED_CONFIG`.
 - `-DBAKED_BW=<Hz>` Bandwidth in Hz (e.g. `250000` for 250 kHz). Requires `BAKED_CONFIG`.
 - `-DBAKED_SF=<7..12>` Spreading factor. Requires `BAKED_CONFIG`.
@@ -60,7 +60,7 @@ Instructions for command line builds and packaging for firmware distribution.
 
 In addition to the upstream RNode boards, this fork adds support for:
 
-- **Faketec** — nRF52840 ProMicro-style board (Nice!Nano-compatible) paired with an Ebyte E22-900M30S (SX1262 + TCXO + external PA, ~30 dBm at the antenna). Built as a dedicated transport/repeater node using `BAKED_CONFIG`, so it requires no `rnodeconf` provisioning. Pinout follows the Meshtastic [`nrf52_promicro_diy_tcxo`](https://github.com/meshtastic/firmware/tree/master/variants/nrf52840/diy/nrf52_promicro_diy_tcxo) variant. See the `[env:Faketec]` section of `platformio.ini` for the radio parameters and memory tuning.
+- **Faketec** — nRF52840 ProMicro-style board (Nice!Nano-compatible) paired with an Ebyte E22-900M30S (SX1262 + TCXO + external PA, ~30 dBm at the antenna). Built as a dedicated transport/repeater node using `BAKED_CONFIG`, so it requires no `rnodeconf` provisioning and **boots directly into Transport Mode on every power-up** — flash the firmware and it starts relaying. Pinout follows the Meshtastic [`nrf52_promicro_diy_tcxo`](https://github.com/meshtastic/firmware/tree/master/variants/nrf52840/diy/nrf52_promicro_diy_tcxo) variant. See the `[env:Faketec]` section of `platformio.ini` for the radio parameters and memory tuning.
 
 ## PlatformIO Command Line
 
