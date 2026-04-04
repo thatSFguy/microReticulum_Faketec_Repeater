@@ -91,12 +91,25 @@ def device_provision(env):
             env.Execute("rnodeconf --product 10 --model 12 --hwrev 1 --rom " + env.subst("$UPLOAD_PORT"))
         case "heltec_t114" | "heltec_t114_local":
             env.Execute("rnodeconf --product c2 --model c7 --hwrev 1 --rom " + env.subst("$UPLOAD_PORT"))
+        case "Faketec":
+            # Faketec builds with BAKED_CONFIG, which intentionally bypasses
+            # the EEPROM lock/product/model/hash gate at boot. No rnodeconf
+            # provisioning is needed or possible — the radio parameters are
+            # baked into the firmware image itself.
+            print("Faketec uses BAKED_CONFIG, skipping rnodeconf provisioning.")
         case _:
             print(f"Unknown board variant {variant}, can not provision device!")
 
 def firmware_hash(source, env):
     # Firmware hash
     print("--- Updating Firmware Hash ---")
+    variant = env.GetProjectOption("custom_variant")
+    if variant == "Faketec":
+        # BAKED_CONFIG bypasses the EEPROM firmware-hash gate, and the
+        # machine doing the upload typically does not have rnodeconf
+        # installed at all. Nothing to do.
+        print("Faketec uses BAKED_CONFIG, skipping firmware hash update.")
+        return
     source_file = source[0].get_abspath()
     platform = env.GetProjectOption("platform")
     print("Platform:", platform)
