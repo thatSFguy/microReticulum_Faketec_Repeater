@@ -230,6 +230,29 @@ void on_transmit_packet(const RNS::Bytes& raw, const RNS::Interface& interface) 
 // CBA RNS
 RNS::Reticulum reticulum(RNS::Type::NONE);
 RNS::Interface lora_interface(RNS::Type::NONE);
+
+#if defined(BAKED_TELEMETRY_ENABLE)
+// ---- Battery / health telemetry ----
+// Persistent IN/SINGLE destination under aspect "faketec/telemetry" that the
+// node periodically announces with an ASCII key=value payload in app_data.
+// See README.md ("Build Options" / BAKED_TELEMETRY_*) and the companion
+// receiver at scripts/telemetry_receiver.py.
+RNS::Destination telemetry_destination(RNS::Type::NONE);
+
+#ifndef BAKED_TELEMETRY_INTERVAL_MS
+  #define BAKED_TELEMETRY_INTERVAL_MS 10800000UL   // 3 hours
+#endif
+#ifndef BAKED_TELEMETRY_FIRST_MS
+  #define BAKED_TELEMETRY_FIRST_MS 30000UL         // 30 s after boot
+#endif
+#ifndef BAKED_TELEMETRY_BATT_SAMPLES
+  #define BAKED_TELEMETRY_BATT_SAMPLES 16
+#endif
+#ifndef BAKED_TELEMETRY_BATT_MULT
+  #define BAKED_TELEMETRY_BATT_MULT 1.815f         // calibrate w/ multimeter
+#endif
+#endif  // BAKED_TELEMETRY_ENABLE
+
 #if defined(RNS_USE_FS)
   // CBA microStore
   #if MCU_VARIANT == MCU_ESP32
@@ -267,6 +290,43 @@ int _write(int file, char *ptr, int len) {
     Serial.flush();
     return wrote;
 }
+
+#if defined(BAKED_TELEMETRY_ENABLE)
+// Average a small burst of ADC samples on PIN_BATTERY and convert to mV.
+// The multiplier depends on the board's voltage divider and must be tuned
+// per hardware with a multimeter (-DBAKED_TELEMETRY_BATT_MULT=...).
+static uint16_t read_battery_mv() {
+  analogReadResolution(12);
+  uint32_t sum = 0;
+  for (int i = 0; i < BAKED_TELEMETRY_BATT_SAMPLES; i++) {
+    sum += analogRead(PIN_BATTERY);
+  }
+  uint32_t avg = sum / BAKED_TELEMETRY_BATT_SAMPLES;
+  return (uint16_t)((float)avg * BAKED_TELEMETRY_BATT_MULT);
+}
+
+// Build a tiny ASCII key=value payload and announce it on the telemetry
+// destination. Any Reticulum node on the mesh running an announce handler
+// for aspect "faketec.telemetry" will receive this as the announce's
+// app_data. Payload is kept < 64 bytes so it fits comfortably in the
+// announce framing.
+static void announce_telemetry() {
+  if (!telemetry_destination) return;
+  char buf[72];
+  int n = snprintf(buf, sizeof(buf),
+    "bat=%u;up=%lu;hpf=%u;ro=%u;rssi=%d;nf=%d",
+    (unsigned)read_battery_mv(),
+    (unsigned long)(millis() / 1000UL),
+    (unsigned)RNS::Utilities::Memory::heap_available(),
+    (unsigned)(radio_online ? 1 : 0),
+    (int)current_rssi,
+    (int)noise_floor);
+  if (n <= 0) return;
+  Serial.print("Telemetry: ");
+  Serial.println(buf);
+  telemetry_destination.announce(RNS::bytesFromString(buf));
+}
+#endif  // BAKED_TELEMETRY_ENABLE
 
 void setup() {
 
@@ -690,6 +750,19 @@ void setup() {
       reticulum.transport_enabled(op_mode == MODE_TNC);
       reticulum.probe_destination_enabled(true);
       reticulum.start();
+
+#if defined(BAKED_TELEMETRY_ENABLE)
+      // Persistent destination for periodic battery/health announces.
+      // Must be created after reticulum.start() so the Transport identity
+      // is fully loaded before we stamp it onto the destination.
+      telemetry_destination = RNS::Destination(
+        RNS::Transport::identity(),
+        RNS::Type::Destination::IN,
+        RNS::Type::Destination::SINGLE,
+        "faketec", "telemetry");
+      TRACEF("Telemetry destination hash: %s",
+        telemetry_destination.hash().toHex().c_str());
+#endif
 
       // Set loop callback only after the Reticulum instance is started
       // (to avoid looping without a completely initialized instance)
@@ -2152,6 +2225,29 @@ void tx_queue_handler() {
 void work_while_waiting() { loop(); }
 
 void loop() {
+
+#if defined(BAKED_TELEMETRY_ENABLE)
+  // Periodic battery / health telemetry. First announce fires shortly
+  // after boot so field deployments can be validated without waiting
+  // for the full interval; subsequent announces run at the configured
+  // cadence (default 3 hours).
+  {
+    static uint32_t last_tele_ms = 0;
+    static bool tele_first_done = false;
+    uint32_t now = millis();
+    bool due;
+    if (!tele_first_done) {
+      due = (now >= BAKED_TELEMETRY_FIRST_MS);
+    } else {
+      due = (now - last_tele_ms >= BAKED_TELEMETRY_INTERVAL_MS);
+    }
+    if (due && radio_online && telemetry_destination) {
+      last_tele_ms = now;
+      tele_first_done = true;
+      announce_telemetry();
+    }
+  }
+#endif
 
 #ifdef HAS_RNS
   // CBA

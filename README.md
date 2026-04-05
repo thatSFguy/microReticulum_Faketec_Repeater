@@ -55,6 +55,11 @@ Instructions for command line builds and packaging for firmware distribution.
 - `-DBAKED_SF=<7..12>` Spreading factor. Requires `BAKED_CONFIG`.
 - `-DBAKED_CR=<5..8>` Coding rate denominator (4/5 .. 4/8). Requires `BAKED_CONFIG`.
 - `-DBAKED_TXP=<dBm>` TX power in dBm at the modem output. Requires `BAKED_CONFIG`.
+- `-DBAKED_TELEMETRY_ENABLE` Enable periodic battery / health announces on aspect `faketec.telemetry`. The node will call `Destination.announce()` on a persistent local destination with an ASCII `key=value` payload (`bat`, `up`, `hpf`, `ro`, `rssi`, `nf`) at a configurable interval. Intended for remote solar-powered repeaters where there's no other way to see battery voltage. See `scripts/telemetry_receiver.py` for a companion Python receiver you can run on any Reticulum-aware host in the mesh. Zero effect on environments that don't define it.
+- `-DBAKED_TELEMETRY_INTERVAL_MS=<ms>` Interval between announces in milliseconds. Default 10800000 (3 hours). Requires `BAKED_TELEMETRY_ENABLE`.
+- `-DBAKED_TELEMETRY_FIRST_MS=<ms>` Delay before the very first announce on boot, in milliseconds. Default 30000 (30 s) so a freshly flashed node can be validated without waiting the full interval. Requires `BAKED_TELEMETRY_ENABLE`.
+- `-DBAKED_TELEMETRY_BATT_SAMPLES=<n>` Number of ADC samples averaged per battery reading. Default 16. Requires `BAKED_TELEMETRY_ENABLE`.
+- `-DBAKED_TELEMETRY_BATT_MULT=<float>` Scaling factor applied to the averaged raw ADC value to convert it to millivolts. **Must be calibrated against a multimeter** — the correct value depends on the board's voltage divider (Nice!Nano clones vary). Default `1.815f`. Requires `BAKED_TELEMETRY_ENABLE` and `PIN_BATTERY` defined in the board block.
 
 ## Supported Boards
 
