@@ -131,6 +131,14 @@ bool sx126x::preInit() {
   #elif BOARD_MODEL == BOARD_TECHO
     SPI.setPins(pin_miso, pin_sclk, pin_mosi);
     SPI.begin();
+  #elif BOARD_MODEL == BOARD_Faketec
+    // Faketec piggy-backs on the nrf52840_dk_adafruit board definition,
+    // whose default SPI pins in pins_arduino.h do NOT match the Faketec's
+    // actual wiring. We must reconfigure the SPI peripheral's pins before
+    // SPI.begin() or the chip never sees a clock edge and preInit()
+    // times out reading the sync word register.
+    SPI.setPins(pin_miso, pin_sclk, pin_mosi);
+    SPI.begin();
   #else
     SPI.begin();
   #endif
@@ -635,7 +643,7 @@ void sx126x::sleep() { uint8_t byte = 0x00; executeOpcode(OP_SLEEP_6X, &byte, 1)
 
 void sx126x::enableTCXO() {
   #if HAS_TCXO
-    #if BOARD_MODEL == BOARD_RAK4631 || BOARD_MODEL == BOARD_HELTEC32_V3 || BOARD_MODEL == BOARD_XIAO_S3 || BOARD_MODEL == BOARD_Faketec
+    #if BOARD_MODEL == BOARD_RAK4631 || BOARD_MODEL == BOARD_HELTEC32_V3 || BOARD_MODEL == BOARD_XIAO_S3
       uint8_t buf[4] = {MODE_TCXO_3_3V_6X, 0x00, 0x00, 0xFF};
     #elif BOARD_MODEL == BOARD_TBEAM
       uint8_t buf[4] = {MODE_TCXO_1_8V_6X, 0x00, 0x00, 0xFF};
@@ -646,6 +654,12 @@ void sx126x::enableTCXO() {
     #elif BOARD_MODEL == BOARD_T3S3
       uint8_t buf[4] = {MODE_TCXO_1_8V_6X, 0x00, 0x00, 0xFF};
     #elif BOARD_MODEL == BOARD_HELTEC_T114
+      uint8_t buf[4] = {MODE_TCXO_1_8V_6X, 0x00, 0x00, 0xFF};
+    #elif BOARD_MODEL == BOARD_Faketec
+      // Ebyte E22-900M30S uses a 1.8V TCXO, confirmed against MeshCore's
+      // PromicroBoard target.h: #define SX126X_DIO3_TCXO_VOLTAGE (1.8f).
+      // Using 3.3V here clocks the TCXO off-spec and silently ruins the
+      // RF reference on both TX and RX.
       uint8_t buf[4] = {MODE_TCXO_1_8V_6X, 0x00, 0x00, 0xFF};
     #elif BOARD_MODEL == BOARD_TECHO
       uint8_t buf[4] = {MODE_TCXO_1_8V_6X, 0x00, 0x00, 0xFF};

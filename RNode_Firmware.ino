@@ -428,9 +428,11 @@ void setup() {
   // Enable the external 3V3 rail that powers the radio module on
   // boards that gate it behind a GPIO (e.g. Faketec via P0.13).
   // Active-high per Meshtastic nrf52_promicro_diy_tcxo variant.
+  // 10 ms settle delay to match MeshCore's PromicroBoard::begin().
   #ifdef PIN_VEXT_EN
     pinMode(PIN_VEXT_EN, OUTPUT);
     digitalWrite(PIN_VEXT_EN, HIGH);
+    delay(10);
   #endif
 
   // Set chip select, reset and interrupt
@@ -1994,13 +1996,17 @@ void validate_status() {
     // Radio parameters come from BAKED_* defines in platformio.ini and are
     // loaded into the lora_* globals by baked_conf_load(). The node boots
     // directly into MODE_TNC (transport mode).
+    //
+    // IMPORTANT: we also skip device_init() here. device_init() returns
+    // `device_init_done && fw_signature_validated`, and fw_signature_validated
+    // is only set to true after device_validate_signature() confirms a
+    // previously stored rnodeconf-provisioned EEPROM hash. Under BAKED_CONFIG
+    // there is no rnodeconf provisioning, so that check will always fail
+    // and hw_ready would stay false, leaving the radio offline. We bypass
+    // it entirely and mark the hardware ready unconditionally.
     eeprom_ok = true;
     if (modem_installed) {
-      #if PLATFORM == PLATFORM_ESP32 || PLATFORM == PLATFORM_NRF52
-        hw_ready = device_init();
-      #else
-        hw_ready = true;
-      #endif
+      hw_ready = true;
     } else {
       hw_ready = false;
       Serial.write("No radio module found\r\n");
