@@ -253,6 +253,32 @@ RNS::Destination telemetry_destination(RNS::Type::NONE);
 #endif
 #endif  // BAKED_TELEMETRY_ENABLE
 
+#if defined(BAKED_LXMF_PRESENCE_ENABLE)
+// ---- LXMF presence ----
+// A second persistent Reticulum destination under aspect "lxmf/delivery"
+// that periodically announces a display name so LXMF clients (MeshChat,
+// Sideband, NomadNet) can see this node in their network visualizer.
+// Kept separate from telemetry_destination because the aspects and
+// payload formats are different: LXMF clients filter by "lxmf.delivery"
+// and expect the app_data to be umsgpack.packb([display_name_bytes, stamp_cost]).
+// Format confirmed against reference implementation in
+// micropython-reticulum/firmware/urns/lxmf.py:
+//   APP_NAME = "lxmf"
+//   Destination(identity, IN, SINGLE, APP_NAME, "delivery")
+//   app_data = umsgpack.packb([display_name.encode("utf-8"), stamp_cost])
+RNS::Destination lxmf_presence_destination(RNS::Type::NONE);
+
+#ifndef BAKED_LXMF_DISPLAY_NAME
+  #define BAKED_LXMF_DISPLAY_NAME "Faketec Repeater"
+#endif
+#ifndef BAKED_LXMF_INTERVAL_MS
+  #define BAKED_LXMF_INTERVAL_MS 1800000UL         // 30 min
+#endif
+#ifndef BAKED_LXMF_FIRST_MS
+  #define BAKED_LXMF_FIRST_MS 15000UL              // 15 s after boot
+#endif
+#endif  // BAKED_LXMF_PRESENCE_ENABLE
+
 #if defined(BAKED_HEARTBEAT_ENABLE)
 // ---- Visual heartbeat ----
 // Brief non-blocking LED flash every BAKED_HEARTBEAT_INTERVAL_MS so a remote
@@ -345,6 +371,35 @@ static void announce_telemetry() {
   telemetry_destination.announce(RNS::bytesFromString(buf));
 }
 #endif  // BAKED_TELEMETRY_ENABLE
+
+#if defined(BAKED_LXMF_PRESENCE_ENABLE)
+// Build a msgpack-encoded app_data payload containing
+// [display_name_bytes, nil] and announce it on the lxmf.delivery
+// destination. Matches the wire format in
+// micropython-reticulum/firmware/urns/lxmf.py:_get_announce_app_data().
+//
+// msgpack layout (for a name up to 255 bytes):
+//   0x92                 fixarray, 2 elements
+//   0xc4 <len> <bytes>   bin8, display_name as UTF-8 (matches umsgpack.packb(bytes))
+//   0xc0                 nil (stamp_cost)
+static void announce_lxmf_presence() {
+  if (!lxmf_presence_destination) return;
+  const char* name = BAKED_LXMF_DISPLAY_NAME;
+  size_t name_len = strlen(name);
+  if (name_len > 200) name_len = 200;   // cap to fit in bin8 and leave room for framing
+  uint8_t buf[256];
+  size_t i = 0;
+  buf[i++] = 0x92;                       // fixarray, 2 elements
+  buf[i++] = 0xc4;                       // bin8
+  buf[i++] = (uint8_t)name_len;
+  memcpy(buf + i, name, name_len);
+  i += name_len;
+  buf[i++] = 0xc0;                       // nil (stamp_cost)
+  Serial.print("LXMF presence: ");
+  Serial.println(name);
+  lxmf_presence_destination.announce(RNS::Bytes(buf, i));
+}
+#endif  // BAKED_LXMF_PRESENCE_ENABLE
 
 void setup() {
 
@@ -780,6 +835,19 @@ void setup() {
         "faketec", "telemetry");
       TRACEF("Telemetry destination hash: %s",
         telemetry_destination.hash().toHex().c_str());
+#endif
+
+#if defined(BAKED_LXMF_PRESENCE_ENABLE)
+      // Persistent destination for LXMF presence announces so clients
+      // like MeshChat / Sideband / NomadNet can show this node by name
+      // in their network visualizers.
+      lxmf_presence_destination = RNS::Destination(
+        RNS::Transport::identity(),
+        RNS::Type::Destination::IN,
+        RNS::Type::Destination::SINGLE,
+        "lxmf", "delivery");
+      TRACEF("LXMF presence destination hash: %s",
+        lxmf_presence_destination.hash().toHex().c_str());
 #endif
 
       // Set loop callback only after the Reticulum instance is started
@@ -2263,6 +2331,30 @@ void loop() {
       last_tele_ms = now;
       tele_first_done = true;
       announce_telemetry();
+    }
+  }
+#endif
+
+#if defined(BAKED_LXMF_PRESENCE_ENABLE)
+  // Periodic LXMF presence announce so MeshChat / Sideband / NomadNet
+  // clients can see this node in their network visualizer with a
+  // human-readable display name. Independent cadence from telemetry —
+  // typically much more frequent (minutes, not hours) because it's what
+  // populates the "online peers" list in clients.
+  {
+    static uint32_t last_lxmf_ms = 0;
+    static bool lxmf_first_done = false;
+    uint32_t now = millis();
+    bool due;
+    if (!lxmf_first_done) {
+      due = (now >= BAKED_LXMF_FIRST_MS);
+    } else {
+      due = (now - last_lxmf_ms >= BAKED_LXMF_INTERVAL_MS);
+    }
+    if (due && radio_online && lxmf_presence_destination) {
+      last_lxmf_ms = now;
+      lxmf_first_done = true;
+      announce_lxmf_presence();
     }
   }
 #endif
