@@ -127,11 +127,25 @@
 	uint8_t cw_max                  =  CSMA_CW_PER_BAND_WINDOWS;
 
 	// LoRa settings
+	// Under BAKED_CONFIG the radio parameters come from compile-time
+	// BAKED_* defines in platformio.ini. Seed the globals at declaration
+	// time so the RNS init block in setup() (which runs well before the
+	// BAKED_CONFIG boot fast-path that calls baked_conf_load()/startRadio())
+	// sees the real values. Without this, Reticulum registers the LoRa
+	// interface and logs the radio parameters as zeros.
+#if defined(BAKED_CONFIG)
+	int  lora_sf                    = BAKED_SF;
+	int  lora_cr                    = BAKED_CR;
+	int  lora_txp                   = BAKED_TXP;
+	uint32_t lora_bw                = BAKED_BW;
+	uint32_t lora_freq              = BAKED_FREQ;
+#else
 	int  lora_sf   	                =  0;
 	int  lora_cr                    =  5;
 	int  lora_txp                   =  0xFF;
 	uint32_t lora_bw                =  0;
 	uint32_t lora_freq              =  0;
+#endif
 	uint32_t lora_bitrate           =  0;
 
 	// Operational variables
@@ -147,7 +161,17 @@
 	bool memory_low    = false;
 	uint8_t implicit_l = 0;
 
+	// With BAKED_CONFIG, the node is a dedicated transport/repeater and
+	// must come up in TNC mode from the very first line of setup() — the
+	// RNS init block runs earlier in setup() than the BAKED_CONFIG boot
+	// fast path, so defaulting to MODE_HOST here would cause
+	// reticulum.transport_enabled(op_mode == MODE_TNC) to latch as false
+	// and leave the node in host mode forever.
+	#if defined(BAKED_CONFIG)
+	uint8_t op_mode   = MODE_TNC;
+	#else
 	uint8_t op_mode   = MODE_HOST;
+	#endif
 	uint8_t model     = 0x00;
 	uint8_t hwrev     = 0x00;
 
