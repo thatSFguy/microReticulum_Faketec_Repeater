@@ -253,6 +253,24 @@ RNS::Destination telemetry_destination(RNS::Type::NONE);
 #endif
 #endif  // BAKED_TELEMETRY_ENABLE
 
+#if defined(BAKED_HEARTBEAT_ENABLE)
+// ---- Visual heartbeat ----
+// Brief non-blocking LED flash every BAKED_HEARTBEAT_INTERVAL_MS so a remote
+// operator can visually confirm the node is alive at a glance, without the
+// LED being solid-on from RX/TX activity. Uses pin_led_rx directly (the
+// Faketec has a single LED wired to both pin_led_rx and pin_led_tx), so
+// it interleaves naturally with the existing led_rx_on/off and
+// led_tx_on/off indication. Worst case the heartbeat briefly extinguishes
+// the LED during a radio burst, which is visually indistinguishable from
+// normal RX/TX activity.
+#ifndef BAKED_HEARTBEAT_INTERVAL_MS
+  #define BAKED_HEARTBEAT_INTERVAL_MS 15000UL      // 15 s between pulses
+#endif
+#ifndef BAKED_HEARTBEAT_DURATION_MS
+  #define BAKED_HEARTBEAT_DURATION_MS 8UL          // 8 ms pulse — "faint"
+#endif
+#endif  // BAKED_HEARTBEAT_ENABLE
+
 #if defined(RNS_USE_FS)
   // CBA microStore
   #if MCU_VARIANT == MCU_ESP32
@@ -2245,6 +2263,26 @@ void loop() {
       last_tele_ms = now;
       tele_first_done = true;
       announce_telemetry();
+    }
+  }
+#endif
+
+#if defined(BAKED_HEARTBEAT_ENABLE)
+  // Non-blocking visual heartbeat. Keeps the LED mostly off and briefly
+  // raises it every BAKED_HEARTBEAT_INTERVAL_MS so a remote operator can
+  // confirm the node is alive without it looking solid-on.
+  if (pin_led_rx >= 0) {
+    static uint32_t hb_next_on_ms = BAKED_HEARTBEAT_INTERVAL_MS;
+    static uint32_t hb_off_at_ms  = 0;
+    uint32_t hb_now = millis();
+    if (hb_off_at_ms != 0 && (int32_t)(hb_now - hb_off_at_ms) >= 0) {
+      digitalWrite(pin_led_rx, LOW);
+      hb_off_at_ms = 0;
+    }
+    if ((int32_t)(hb_now - hb_next_on_ms) >= 0) {
+      digitalWrite(pin_led_rx, HIGH);
+      hb_off_at_ms  = hb_now + BAKED_HEARTBEAT_DURATION_MS;
+      hb_next_on_ms = hb_now + BAKED_HEARTBEAT_INTERVAL_MS;
     }
   }
 #endif

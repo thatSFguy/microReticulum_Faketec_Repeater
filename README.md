@@ -60,6 +60,9 @@ Instructions for command line builds and packaging for firmware distribution.
 - `-DBAKED_TELEMETRY_FIRST_MS=<ms>` Delay before the very first announce on boot, in milliseconds. Default 30000 (30 s) so a freshly flashed node can be validated without waiting the full interval. Requires `BAKED_TELEMETRY_ENABLE`.
 - `-DBAKED_TELEMETRY_BATT_SAMPLES=<n>` Number of ADC samples averaged per battery reading. Default 16. Requires `BAKED_TELEMETRY_ENABLE`.
 - `-DBAKED_TELEMETRY_BATT_MULT=<float>` Scaling factor applied to the averaged raw ADC value to convert it to millivolts. **Must be calibrated against a multimeter** — the correct value depends on the board's voltage divider (Nice!Nano clones vary). Default `1.815f`. Requires `BAKED_TELEMETRY_ENABLE` and `PIN_BATTERY` defined in the board block.
+- `-DBAKED_HEARTBEAT_ENABLE` Non-blocking visual heartbeat. Briefly pulses `pin_led_rx` every `BAKED_HEARTBEAT_INTERVAL_MS` (default 15 s) for `BAKED_HEARTBEAT_DURATION_MS` (default 8 ms). Gives a "node is alive" indicator without the LED being solid on. Interleaves naturally with the existing RX/TX activity indication. Zero effect on environments that don't define it.
+- `-DBAKED_HEARTBEAT_INTERVAL_MS=<ms>` Interval between heartbeat pulses in milliseconds. Default `15000` (15 s). Requires `BAKED_HEARTBEAT_ENABLE`.
+- `-DBAKED_HEARTBEAT_DURATION_MS=<ms>` Duration of each heartbeat pulse in milliseconds. Longer = brighter, shorter = fainter. Default `8`. Requires `BAKED_HEARTBEAT_ENABLE`.
 
 ## Supported Boards
 
